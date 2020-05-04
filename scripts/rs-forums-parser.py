@@ -15,13 +15,38 @@ curious_george.patch_all(thread=False, select=False)
 
 import requests
 import grequests
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 FORUMS_URL_PATTERN = re.compile(
-    r"^(https://secure\.runescape\.com/m=forum/forums\?\d{3},\d{3},\d{3},\d{8})(?:,goto,\d+)?$"
+    r"^(https://secure\.runescape\.com/m=forum/forums\?\d{2,3},\d{2,3},\d{3},\d{8})(?:,goto,\d+)?$"
 )
-FORUMS_QFC_PATTERN = re.compile(r"^\d{3}-\d{3}-\d{3}-\d{8}$")
+FORUMS_QFC_PATTERN = re.compile(r"^\d{2,3}-\d{2,3}-\d{3}-\d{8}$")
 LAST_EDIT_PATTERN = re.compile(r"^- Last edited on (.+) by .+$")
 POSTS_PER_PAGE = 10
+
+
+class FeedbackCounter:
+    """Object to provide a feedback callback keeping track of total calls."""
+
+    def __init__(self, total, quiet):
+        self.counter = 0
+        self.total = total
+        self.quiet = quiet
+
+    def feedback(self, r, **kwargs):
+        self.counter += 1
+        if not self.quiet:
+            print(
+                f"[{self.counter}/{self.total}] - Fetched page {r.url.split(',')[-1]}",
+                file=sys.stderr,
+                end="\r",
+            )
+        return r
+
+
+def exception_handler(request, exception):
+    print(exception, file=sys.stderr)
 
 
 def qfc_to_url(qfc):
@@ -35,7 +60,7 @@ def grab_posts_from_page(pageidx, page):
         created, lastedited = extract_post_timeinfo(post)
         p = {
             "id": POSTS_PER_PAGE * pageidx + idx,
-            "onpage": pageidx + 1,
+            "page": pageidx + 1,
             "poster": extract_poster(post),
             "message": extract_post_message(post),
             "created": created,
@@ -68,11 +93,11 @@ def extract_poster(post):
 
 
 def extract_post_timeinfo(post):
-    timeinfo = post.find("p", {"class": "forum-post__time-below"}).get_text()
+    timeinfo = post.find("p", {"class": "forum-post__time-below"})
     if timeinfo is None:
         return None, None
 
-    times = timeinfo.strip().split("\n")
+    times = timeinfo.get_text().strip().split("\n")
 
     created = dateparser.parse(times[0]).isoformat()
     if len(times) == 1:
@@ -104,7 +129,7 @@ parser.add_argument(
     help="the forums url or qfc to parse",
 )
 parser.add_argument(
-    "-q", "--quiet", dest="quiet", action="store_true", help="Do not display output"
+    "-q", "--quiet", dest="quiet", action="store_true", help="do not display output"
 )
 parser.add_argument(
     "-o",
@@ -119,7 +144,7 @@ parser.add_argument(
     action="store",
     dest="workers",
     type=int,
-    default=5,
+    default=4,
     help="set the amount of workers to fetch webpages",
 )
 
@@ -145,14 +170,37 @@ if not args["quiet"]:
 
 urls = [f"{args['thread']},goto,{pagenum}" for pagenum in range(1, n_pages + 1)]
 
-rs = (grequests.get(u) for u in urls)
+fbc = FeedbackCounter(n_pages, args["quiet"])
+headers = {
+    "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0",
+}
+s = requests.Session()
+retries = Retry(
+    total=10,
+    backoff_factor=0.2,
+    status_forcelist=[500, 502, 503, 504],
+    raise_on_redirect=True,
+    raise_on_status=True,
+)
+s.mount("http://", HTTPAdapter(max_retries=retries))
+s.mount("https://", HTTPAdapter(max_retries=retries))
+rs = (grequests.get(u, headers=headers, callback=fbc.feedback, session=s) for u in urls)
 
-reqs = grequests.map(rs, size=args["workers"])
+reqs = grequests.map(rs, size=args["workers"], exception_handler=exception_handler)
 
-pages = (BeautifulSoup(r.content, "html.parser") for r in reqs)
+pages = (BeautifulSoup(r.content, "html.parser") for r in reqs if r is not None)
+
+if not args["quiet"]:
+    print(f"Grabbing data from pages...", file=sys.stderr)
 
 threadposts = []
 for pageidx, page in enumerate(pages):
+    if not args["quiet"]:
+        print(
+            f"[{pageidx}/{n_pages}] - Extracting posts from page {pageidx}",
+            file=sys.stderr,
+            end="\r",
+        )
     threadposts += grab_posts_from_page(pageidx, page)
 
 info = {
