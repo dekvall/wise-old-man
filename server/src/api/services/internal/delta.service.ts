@@ -5,7 +5,7 @@ import { Pagination } from 'src/types';
 import { Delta, InitialValues, Player, Snapshot } from '../../../database/models';
 import { ALL_METRICS, PERIODS, PLAYER_BUILDS, PLAYER_TYPES } from '../../constants';
 import { BadRequestError } from '../../errors';
-import { getMeasure, getRankKey, getValueKey, isSkill } from '../../util/metrics';
+import { getMeasure, getRankKey, getValueKey, isEfficiency, isSkill } from '../../util/metrics';
 import { buildQuery } from '../../util/query';
 import * as snapshotService from './snapshot.service';
 
@@ -250,6 +250,7 @@ async function getGroupLeaderboard(
  */
 function diff(start: Snapshot, end: Snapshot, initial: InitialValues) {
   const diffObj = {};
+  const parseNum = (key, val) => (isEfficiency(key) ? parseFloat(val) : parseInt(val));
 
   ALL_METRICS.forEach(metric => {
     const rankKey = getRankKey(metric);
@@ -258,10 +259,10 @@ function diff(start: Snapshot, end: Snapshot, initial: InitialValues) {
     const initialRank = initial ? initial[rankKey] : -1;
     const initialValue = initial ? initial[valueKey] : -1;
 
-    const endValue = parseInt(end[valueKey], 10);
+    const endValue = parseNum(metric, end[valueKey]);
     const endRank = end[rankKey];
 
-    const startValue = parseInt(start[valueKey] === -1 ? initialValue : start[valueKey], 10);
+    const startValue = parseNum(metric, start[valueKey] === -1 ? initialValue : start[valueKey]);
     const startRank = start[rankKey] === -1 && !isSkill(metric) ? initialRank : start[rankKey];
 
     // Do not use initial ranks for skill, to prevent -1 ranks
