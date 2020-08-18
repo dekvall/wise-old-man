@@ -1,3 +1,4 @@
+import { BadRequestError } from '../errors';
 import * as achievementService from '../services/internal/achievement.service';
 import * as competitionService from '../services/internal/competition.service';
 import * as deltaService from '../services/internal/delta.service';
@@ -25,6 +26,8 @@ async function search(req, res, next) {
 async function track(req, res, next) {
   try {
     const { username } = req.body;
+
+    if (!username) throw new BadRequestError('Invalid username.');
 
     // Update the player, by creating a new snapshot
     const [player, snapshot, isNew] = await playerService.update(username);
