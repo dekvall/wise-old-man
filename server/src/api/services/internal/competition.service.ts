@@ -6,6 +6,7 @@ import { ALL_METRICS, COMPETITION_STATUSES } from '../../constants';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../errors';
 import { durationBetween, isPast, isValidDate } from '../../util/dates';
 import { getMinimumBossKc, getValueKey, isActivity, isBoss, isSkill } from '../../util/metrics';
+import { round } from '../../util/numbers';
 import * as cryptService from '../external/crypt.service';
 import * as groupService from './group.service';
 import * as playerService from './player.service';
@@ -198,7 +199,7 @@ async function getDetails(id) {
     .map(({ player, startSnapshot, endSnapshot }) => {
       const start = startSnapshot ? startSnapshot[metricKey] : -1;
       const end = endSnapshot ? endSnapshot[metricKey] : -1;
-      const gained = Math.max(0, end - Math.max(minimumValue - 1, start));
+      const gained = Math.max(0, round(end - Math.max(minimumValue - 1, start), 5));
 
       return {
         ...player.toJSON(),
