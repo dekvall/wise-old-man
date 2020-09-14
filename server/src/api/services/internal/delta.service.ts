@@ -6,6 +6,7 @@ import { Delta, InitialValues, Player, Snapshot } from '../../../database/models
 import { ALL_METRICS, PERIODS, PLAYER_BUILDS, PLAYER_TYPES } from '../../constants';
 import { BadRequestError } from '../../errors';
 import { getMeasure, getRankKey, getValueKey, isEfficiency, isSkill } from '../../util/metrics';
+import { round } from '../../util/numbers';
 import { buildQuery } from '../../util/query';
 import * as snapshotService from './snapshot.service';
 
@@ -29,6 +30,10 @@ export function getSeconds(period) {
     default:
       return -1;
   }
+}
+
+function parseNum(key: string, val: string) {
+  return isEfficiency(key) ? parseFloat(val) : parseInt(val);
 }
 
 async function syncDeltas(playerId: number, period: string, latest: Snapshot, initial: InitialValues) {
@@ -61,18 +66,18 @@ async function syncDeltas(playerId: number, period: string, latest: Snapshot, in
     const initialRank = initial ? initial[rankKey] : -1;
     const initialValue = initial ? initial[valueKey] : -1;
 
-    const endValue = parseInt(latest[valueKey]);
+    const endValue = parseNum(metric, latest[valueKey]);
     const endRank = latest[rankKey];
     // TODO: const endEfficiency = ...
 
-    const startValue = parseInt(first[valueKey] === -1 ? initialValue : first[valueKey]);
+    const startValue = parseNum(metric, first[valueKey] === -1 ? initialValue : first[valueKey]);
     const startRank = first[rankKey] === -1 && !isSkill(metric) ? initialRank : first[rankKey];
     // TODO: const startEfficiency = ...
 
     // Do not use initial ranks for skill, to prevent -1 ranks
     // introduced by https://github.com/wise-old-man/wise-old-man/pull/93 from creating crazy diffs
     const gainedRank = isSkill(metric) && first[rankKey] === -1 ? 0 : endRank - startRank;
-    const gainedValue = endValue - startValue;
+    const gainedValue = round(endValue - startValue, 5);
     // TODO: const gainedEfficiency = ...
 
     deltaDefinitions['value'][metric] = gainedValue;
@@ -211,7 +216,7 @@ async function getLeaderboard(metric: string, period: string, type?: string, bui
   return deltas.map(d => ({
     startDate: d.startedAt,
     endDate: d.endedAt,
-    gained: parseInt(d[metric]),
+    gained: Math.max(0, parseNum(metric, d[metric])),
     player: d.player
   }));
 }
@@ -239,7 +244,7 @@ async function getGroupLeaderboard(
   return deltas.map(d => ({
     startDate: d.startedAt,
     endDate: d.endedAt,
-    gained: parseInt(d[metric]),
+    gained: Math.max(0, parseNum(metric, d[metric])),
     player: d.player
   }));
 }
@@ -250,7 +255,6 @@ async function getGroupLeaderboard(
  */
 function diff(start: Snapshot, end: Snapshot, initial: InitialValues) {
   const diffObj = {};
-  const parseNum = (key, val) => (isEfficiency(key) ? parseFloat(val) : parseInt(val));
 
   ALL_METRICS.forEach(metric => {
     const rankKey = getRankKey(metric);
@@ -268,7 +272,7 @@ function diff(start: Snapshot, end: Snapshot, initial: InitialValues) {
     // Do not use initial ranks for skill, to prevent -1 ranks
     // introduced by https://github.com/wise-old-man/wise-old-man/pull/93 from creating crazy diffs
     const gainedRank = isSkill(metric) && start[rankKey] === -1 ? 0 : endRank - startRank;
-    const gainedValue = endValue - startValue;
+    const gainedValue = round(endValue - startValue, 5);
 
     diffObj[metric] = {
       rank: {
