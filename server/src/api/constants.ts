@@ -137,3 +137,6 @@ export const BOSSES = BOSSES_MAP.map(s => s.key);
 export const EFFICIENCY = EFFICIENCY_MAP.map(s => s.key);
 
 export const ALL_METRICS = [...SKILLS, ...ACTIVITIES, ...BOSSES, ...EFFICIENCY];
+
+export const EXP_MAX = 200_000_000;
+export const EXP_99 = 13_034_431;

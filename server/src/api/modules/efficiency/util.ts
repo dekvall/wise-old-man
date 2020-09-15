@@ -1,37 +1,48 @@
-import { Bonus, BonusType, BossMeta, Experiences, Killcounts, SkillMeta } from '../../../types';
-import { BOSSES, SKILLS } from '../../constants';
+import { BonusType, BossMeta, Experiences, Killcounts, SkillMeta, RichBonus } from '../../../types';
+import { BOSSES, SKILLS, EXP_MAX, EXP_99 } from '../../constants';
 
-function getBonuses(metas: SkillMeta[], type: BonusType): Bonus[] {
+function getBonuses(metas: SkillMeta[], type: BonusType): RichBonus[] {
   return metas
-    .filter(r => r.bonuses.length > 0)
-    .map(r => r.bonuses)
-    .flat()
+    .flatMap(meta => {
+      const methods = meta.methods;
+      const expStarts = methods.map(m => m.startExp);
+
+      return methods.flatMap((m, i) =>
+        m.bonuses.map(b => ({
+          ...b,
+          startExp: expStarts[i],
+          endExp: expStarts[i + 1] || EXP_MAX,
+          parent: meta.name
+        }))
+      );
+    })
     .filter(b => b?.end === (type === BonusType.End));
 }
 
-function calculateBonuses(experiences: Experiences, bonuses: Bonus[]) {
+function calculateBonuses(experiences: Experiences, bonuses: RichBonus[]) {
   // Creates an object with an entry for each bonus skill (0 bonus exp)
-  const map = Object.fromEntries(bonuses.map(b => [b.bonusSkill, 0]));
+  const map = Object.fromEntries(bonuses.map(b => [b.name, 0]));
 
   bonuses.forEach(b => {
-    const expCap = Math.min(b.endExp, 200_000_000);
-    const start = Math.max(experiences[b.originSkill], b.startExp);
-    const target = b.originSkill in map ? expCap - map[b.originSkill] : expCap;
+    const expCap = Math.min(b.endExp, EXP_MAX);
+    const start = Math.max(experiences[b.parent], b.startExp);
+    const target = b.parent in map ? expCap - map[b.parent] : expCap;
 
-    map[b.bonusSkill] += Math.max(0, target - start) * b.ratio;
+    map[b.name] += Math.max(0, target - start) * b.ratio;
   });
-
   return map;
 }
 
 function calculateMaximumEHP(metas: SkillMeta[]) {
   const zeroStats = Object.fromEntries(SKILLS.map(s => [s, 0]));
-  return calculateTT200m(zeroStats, metas);
+  const res = calculateTT200m(zeroStats, metas);
+  console.log(`TTM is ${res} and should be 14,962`);
+  return res;
 }
 
 function calculateMaxedEHP(metas: SkillMeta[]) {
   const zeroStats = Object.fromEntries(SKILLS.map(s => [s, 0]));
-  const maxedStats = Object.fromEntries(SKILLS.map(s => [s, 13_034_431]));
+  const maxedStats = Object.fromEntries(SKILLS.map(s => [s, EXP_99]));
   return calculateTT200m(zeroStats, metas) - calculateTT200m(maxedStats, metas);
 }
 
@@ -58,19 +69,23 @@ function calculateTT200m(experiences: Experiences, metas: SkillMeta[]): number {
   const startExps = Object.fromEntries(SKILLS.map(s => [s, experiences[s] + (startBonusExp[s] || 0)]));
 
   const targetExps = Object.fromEntries(
-    SKILLS.map(s => [s, s in endBonusExp ? 200_000_000 - endBonusExp[s] : 200_000_000])
+    SKILLS.map(s => [s, s in endBonusExp ? EXP_MAX - endBonusExp[s] : EXP_MAX])
   );
+  console.log('======');
 
   const skillTimes = SKILLS.map(skill => {
     if (skill === 'overall') return 0;
 
-    const methods = metas.find(sm => sm.skill === skill)?.methods;
+    const methods = metas.find(sm => sm.name === skill)?.methods;
     const startExp = startExps[skill];
     const endExp = targetExps[skill];
 
+    console.log(`skill: ${skill} start: ${startExp}, end: ${endExp}`);
+    console.log(methods);
+
     // Handle 0 time skills (Hitpoints, Magic, Fletching)
     if (!methods || (methods.length === 1 && methods[0].rate === 0)) {
-      return (endExp - startExp) / 200_000_000;
+      return (endExp - startExp) / EXP_MAX;
     }
 
     let skillTime = 0;
@@ -95,7 +110,7 @@ function calculateTT200m(experiences: Experiences, metas: SkillMeta[]): number {
     return skillTime;
   });
 
-  // Sum all inidividual skill times, into the total TTM
+  // Sum all individual skill times, into the total TTM
   return skillTimes.reduce((a, c) => a + c);
 }
 

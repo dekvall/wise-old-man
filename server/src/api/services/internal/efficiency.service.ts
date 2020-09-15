@@ -6,7 +6,7 @@ import {
   default as ironAlgorithm,
   default as lvl3Algorithm,
   default as mainAlgorithm
-} from '../../modules/efficiency/algorithms/main';
+} from '../../modules/efficiency/algorithm';
 import { getValueKey } from '../../util/metrics';
 import { round } from '../../util/numbers';
 
