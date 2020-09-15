@@ -1,7 +1,6 @@
 export interface SkillMeta {
-  skill: string;
+  name: string;
   methods: Method[];
-  bonuses: Bonus[];
 }
 
 export interface BossMeta {
@@ -13,15 +12,14 @@ export interface Method {
   startExp: number;
   rate: number;
   description: string;
+  bonuses: Bonus[];
 }
 
 export interface Bonus {
-  originSkill: string;
-  bonusSkill: string;
-  startExp: number;
-  endExp: number;
-  end: boolean;
+  parent: string;
+  name: string;
   ratio: number;
+  end: boolean;
 }
 
 export interface Algorithm {

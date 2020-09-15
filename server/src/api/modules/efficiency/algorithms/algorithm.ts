@@ -1,18 +1,28 @@
 import { Algorithm, BossMeta, Experiences, Killcounts, SkillMeta } from '../../../../types';
-import mainBossingMetas from '../configs/ehb/main.ehb';
-import mainSkillingMetas from '../configs/ehp/main.ehp';
+import * as mainBossingMetas from 'wom-rates/current/main/ehb.json';
+import * as mainSkillingMetas from 'wom-rates/current/main/ehp.json';
+
+import * as ironBossingMetas from 'wom-rates/current/iron/ehb.json';
+import * as ironSkillingMetas from 'wom-rates/current/iron/ehp.json';
+
+import * as f2pBossingMetas from 'wom-rates/current/f2p/ehb.json';
+import * as f2pSkillingMetas from 'wom-rates/current/f2p/ehp.json';
+
+import * as lvl3BossingMetas from 'wom-rates/current/lvl3/ehb.json';
+import * as lvl3SkillingMetas from 'wom-rates/current/lvl3/ehp.json';
+
 import { calculateBossEHB, calculateEHB, calculateMaxEHP, calculateTTM } from '../util';
 
-class MainAlgorithm implements Algorithm {
+class EfficiencyAlgorithm implements Algorithm {
   type: string;
   skillMetas: SkillMeta[];
   bossMetas: BossMeta[];
   maxEHP: number;
 
-  constructor() {
-    this.type = 'main';
-    this.skillMetas = mainSkillingMetas;
-    this.bossMetas = mainBossingMetas;
+  constructor(type: string) {
+    this.type = type;
+    this.skillMetas = mainSkillingMetas.skills;
+    this.bossMetas = mainBossingMetas.bosses;
     this.maxEHP = this.calculateMaxEHP();
   }
 
@@ -41,4 +51,4 @@ class MainAlgorithm implements Algorithm {
   }
 }
 
-export default new MainAlgorithm();
+export default EfficiencyAlgorithm;
